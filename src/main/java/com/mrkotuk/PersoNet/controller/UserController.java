@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.mrkotuk.PersoNet.model.AuthResponse;
 import com.mrkotuk.PersoNet.model.User;
 import com.mrkotuk.PersoNet.service.UserService;
 
@@ -20,12 +21,25 @@ public class UserController {
 
     @PostMapping("/register")
     public ResponseEntity<User> register(@RequestBody User user) {
+        System.out.println("register");
         service.register(user);
-        return new ResponseEntity<>(user, HttpStatus.CREATED);
+        return new ResponseEntity<>(user, HttpStatus.OK);
     }
 
     @PostMapping("/login")
-    public ResponseEntity<String> login(@RequestBody User user) {
-        return service.verify(user);
+    public ResponseEntity<AuthResponse> login(@RequestBody User user) {
+        System.out.println("Login attempt for user: " + user.getUsername());
+
+        String token = service.verify(user);
+
+        if (token != null) {
+            AuthResponse response = new AuthResponse();
+            response.setToken(token);
+            return new ResponseEntity<>(response, HttpStatus.OK);
+        } else {
+            AuthResponse errorResponse = new AuthResponse();
+            errorResponse.setMessage("Invalid credentials");
+            return new ResponseEntity<>(errorResponse, HttpStatus.UNAUTHORIZED);
+        }
     }
 }

@@ -6,6 +6,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Perso|||et</title>
     <link rel="stylesheet" href="styles.css">
+    <style>
+        /* Styles for the success message */
+        #successMessage {
+            color: green;
+            font-size: 24px;
+            display: none; /* Hidden by default */
+            margin: 20px 0;
+        }
+
+        /* Styles for the error message */
+        #errorMessage {
+            color: red;
+            font-size: 24px;
+            display: none; /* Hidden by default */
+            margin: 20px 0;
+        }
+
+        /* Additional styles for the modal and other elements can be added here */
+    </style>
 </head>
 
 <body>
@@ -30,6 +49,9 @@
         <div class="landing-content">
             <h1 class="welcome-text">Welcome to Perso|||et</h1>
             <p class="subtitle">The best way to manage and organize your contacts effortlessly.</p>
+            <p id="welcomeMessage"></p>
+            <div id="successMessage">You have successfully logged in or registered!</div>
+            <div id="errorMessage"></div> <!-- Error message element -->
             <button class="btn btn-three glow-on-hover" onclick="openModal()">
                 Start Managing Contacts
             </button>
@@ -40,14 +62,13 @@
         <p>© 2024 Perso|||et. All rights reserved.</p>
     </footer>
 
-    <!-- Modal for Login/Register -->
     <div id="authModal" class="modal" style="display:none;">
         <div class="modal-content">
             <span class="close-button" onclick="closeModal()">&times;</span>
             <h2>Login/Register</h2>
             <div class="auth-form">
-                <input type="username" id="username" placeholder="Username" required>
-                <input type="password" id="password" placeholder="Password" required>
+                <input type="text" id="username" placeholder="Username" required autocomplete="username">
+                <input type="password" id="password" placeholder="Password" required autocomplete="current-password">
                 <button class="btn btn-three" onclick="login()">Login</button>
                 <button class="btn btn-three" id="registerButton" onclick="register()" style="display:none;">Register</button>
             </div>
@@ -55,28 +76,61 @@
                 Don't have an account? <span onclick="toggleAuth()">Register here</span>
             </div>
             <div class="social-buttons">
-                <button class="social-button" style="background-color: #4285F4;" onclick="loginWithGoogle()">
+                <a href="http://localhost:8080/oauth2/authorization/google" class="social-button">
                     Login with Google
-                </button>
-                <button class="social-button" style="background-color: #333;" onclick="loginWithGitHub()">
+                </a>
+                <a href="http://localhost:8080/oauth2/authorization/github" class="social-button">
                     Login with GitHub
-                </button>
+                </a>
             </div>
         </div>
     </div>
 
     <script>
-        // Function to open the auth modal
+        document.addEventListener('DOMContentLoaded', () => {
+            // Extract the token from the URL query string after OAuth2 login
+            const urlParams = new URLSearchParams(window.location.search);
+            const token = urlParams.get('token');
+
+            if (token) {
+                // Store the token in localStorage
+                localStorage.setItem('jwtToken', token);
+
+                // Clear the URL to remove the token from the query string
+                window.history.replaceState({}, document.title, window.location.pathname);
+
+                // Fetch and display greeting message using the token
+                getGreeting();
+
+                // Redirect to the home page after successful token storage
+                window.location.href = 'index.html';
+            } else {
+                // If token exists in localStorage, use it to fetch greeting
+                const savedToken = localStorage.getItem('jwtToken');
+                if (savedToken) {
+                    getGreeting(); // Fetch greeting if token exists
+                }
+            }
+
+            // Handle previously saved greeting
+            const greeting = localStorage.getItem('greeting');
+            if (greeting) {
+                document.getElementById('welcomeMessage').innerText = greeting;
+            }
+        });
+
         function openModal() {
             document.getElementById('authModal').style.display = 'block';
+            document.getElementById('errorMessage').style.display = 'none'; // Clear error message on open
         }
 
-        // Function to close the auth modal
         function closeModal() {
             document.getElementById('authModal').style.display = 'none';
+            // Hide the success message when closing the modal
+            document.getElementById('successMessage').style.display = 'none';
+            document.getElementById('errorMessage').style.display = 'none'; // Hide error message on close
         }
 
-        // Function to login the user
         async function login() {
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
@@ -86,20 +140,25 @@
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ username, password }), // Updated to match your User model
+                body: JSON.stringify({ username, password }),
             });
 
             if (response.ok) {
-                const data = await response.text(); // Assuming the response is a string message
-                alert('Login successful: ' + data);
-                // Redirect or update the UI here
-                closeModal(); // Close modal on successful login
+                const data = await response.json(); // Parse the JSON response
+                if (data.token) {
+                    localStorage.setItem('jwtToken', data.token); // Store the JWT token
+                    document.getElementById('successMessage').style.display = 'block'; // Show success message
+                    document.getElementById('errorMessage').style.display = 'none'; // Hide error message
+                    window.location.href = 'index.html'; // Redirect after login
+                } else {
+                    showError("Login successful, but no token returned.");
+                }
             } else {
-                alert('Login failed: ' + response.statusText);
+                const errorData = await response.json(); // Get error details
+                showError(errorData.message || 'Login failed: ' + response.statusText); // Display error message
             }
         }
 
-        // Function to handle registration
         async function register() {
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
@@ -109,37 +168,57 @@
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ username, password }), // Updated to match your User model
+                body: JSON.stringify({ username, password }),
             });
 
             if (response.ok) {
-                const user = await response.json(); // Assuming the response returns the user object
-                alert('Registration successful for: ' + user.username);
-                // Redirect or update the UI here
-                closeModal(); // Close modal on successful registration
+                document.getElementById('successMessage').style.display = 'block'; // Show success message
+                closeModal();
             } else {
-                alert('Registration failed: ' + response.statusText);
+                const errorData = await response.json(); // Get error details
+                showError(errorData.message || 'Registration failed: ' + response.statusText); // Display error message
             }
         }
 
-        // Function to toggle between login and register forms
+        async function getGreeting() {
+            const token = localStorage.getItem('jwtToken'); // Get the stored JWT token
+            if (!token) {
+                console.error("No JWT token found in localStorage");
+                return;
+            }
+
+            const response = await fetch('http://localhost:8080/', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`  // Include the token in the request
+                }
+            });
+
+            if (response.ok) {
+                const greeting = await response.text(); // Assuming the response is plain text
+                localStorage.setItem('greeting', greeting);  // Save the greeting in localStorage
+                document.getElementById('welcomeMessage').innerText = greeting;
+            } else {
+                console.error("Error fetching greeting:", response.statusText);
+            }
+        }
+
         function toggleAuth() {
             const registerButton = document.getElementById('registerButton');
-            const toggleText = document.getElementById('toggle-auth').querySelector('span');
-            if (registerButton.style.display === 'none') {
-                registerButton.style.display = 'inline-block';
-                toggleText.innerHTML = 'Already have an account? <span onclick="toggleAuth()">Login here</span>';
-            } else {
-                registerButton.style.display = 'none';
-                toggleText.innerHTML = 'Don\'t have an account? <span onclick="toggleAuth()">Register here</span>';
-            }
+            registerButton.style.display = registerButton.style.display === 'none' ? 'block' : 'none';
+
+            // Clear input fields when switching between login and register
+            document.getElementById('username').value = '';
+            document.getElementById('password').value = '';
         }
 
-        // Function to start managing contacts (not connected yet)
-        function startManaging() {
-            // Logic to start managing contacts
-            // This might be a redirect to a contacts management page
+        function showError(message) {
+            const errorMessageDiv = document.getElementById('errorMessage');
+            errorMessageDiv.innerText = message;
+            errorMessageDiv.style.display = 'block'; // Show error message
         }
     </script>
 </body>
+
 </html>
