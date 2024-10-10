@@ -38,7 +38,8 @@ public class SecurityConfig {
                         .requestMatchers("/register", "/login", "/oauth2/**", "/").permitAll()
                         .anyRequest().authenticated())
                 .oauth2Login(oauth2 -> oauth2
-                        .defaultSuccessUrl("/oauth2/success", true)
+                        .defaultSuccessUrl("/", true)
+                        .failureUrl("/login?error")
                         .successHandler(oAuth2LoginSuccessHandler))
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(jwtFilter, OAuth2LoginAuthenticationFilter.class);

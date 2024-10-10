@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Perso|||et</title>
+    <title>PersoNet</title>
     <link rel="stylesheet" href="styles.css">
     <style>
         /* Styles for the success message */
@@ -32,7 +32,7 @@
         <nav class="navbar">
             <div class="logo-container">
                 <a href="index.html">
-                    <img src="PersoNetLogo.png" alt="Perso|||et Logo" class="logo">
+                    <img src="PersoNetLogo.png" alt="PersoNet Logo" class="logo">
                 </a>
             </div>
             <ul>
@@ -41,13 +41,14 @@
                 <li><a href="about.html">About</a></li>
                 <li><a href="account.html">Account</a></li>
                 <li><a href="settings.html">Settings</a></li>
+                <li><a href="#" id="logoutButton" onclick="logout()" style="display:none;">Logout</a></li>
             </ul>
         </nav>
     </header>
 
     <main class="landing-section">
         <div class="landing-content">
-            <h1 class="welcome-text">Welcome to Perso|||et</h1>
+            <h1 class="welcome-text">Welcome to PersoNet</h1>
             <p class="subtitle">The best way to manage and organize your contacts effortlessly.</p>
             <p id="welcomeMessage"></p>
             <div id="successMessage">You have successfully logged in or registered!</div>
@@ -59,7 +60,7 @@
     </main>
 
     <footer>
-        <p>© 2024 Perso|||et. All rights reserved.</p>
+        <p>© 2024 PersoNet. All rights reserved.</p>
     </footer>
 
     <div id="authModal" class="modal" style="display:none;">
@@ -88,34 +89,26 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // Extract the token from the URL query string after OAuth2 login
+            // Handle previously saved greeting
+            const greeting = localStorage.getItem('greeting');
+            if (greeting) {
+                document.getElementById('welcomeMessage').innerText = greeting;
+            }
+
+            // Check for OAuth2 login response
             const urlParams = new URLSearchParams(window.location.search);
             const token = urlParams.get('token');
 
             if (token) {
                 // Store the token in localStorage
                 localStorage.setItem('jwtToken', token);
-
-                // Clear the URL to remove the token from the query string
-                window.history.replaceState({}, document.title, window.location.pathname);
-
-                // Fetch and display greeting message using the token
                 getGreeting();
-
-                // Redirect to the home page after successful token storage
-                window.location.href = 'index.html';
             } else {
-                // If token exists in localStorage, use it to fetch greeting
+                // Check if a JWT token exists
                 const savedToken = localStorage.getItem('jwtToken');
                 if (savedToken) {
-                    getGreeting(); // Fetch greeting if token exists
+                    getGreeting();
                 }
-            }
-
-            // Handle previously saved greeting
-            const greeting = localStorage.getItem('greeting');
-            if (greeting) {
-                document.getElementById('welcomeMessage').innerText = greeting;
             }
         });
 
@@ -126,9 +119,9 @@
 
         function closeModal() {
             document.getElementById('authModal').style.display = 'none';
-            // Hide the success message when closing the modal
+            // Hide the success and error messages when closing the modal
             document.getElementById('successMessage').style.display = 'none';
-            document.getElementById('errorMessage').style.display = 'none'; // Hide error message on close
+            document.getElementById('errorMessage').style.display = 'none';
         }
 
         async function login() {
@@ -147,9 +140,14 @@
                 const data = await response.json(); // Parse the JSON response
                 if (data.token) {
                     localStorage.setItem('jwtToken', data.token); // Store the JWT token
+                    localStorage.setItem('username', data.username); // Store the username
                     document.getElementById('successMessage').style.display = 'block'; // Show success message
                     document.getElementById('errorMessage').style.display = 'none'; // Hide error message
-                    window.location.href = 'index.html'; // Redirect after login
+
+                    // Redirect to the homepage after a short delay to allow user interaction
+                    setTimeout(() => {
+                        window.location.href = 'index.html';
+                    }, 500); // Short delay to simulate user interaction
                 } else {
                     showError("Login successful, but no token returned.");
                 }
@@ -181,42 +179,47 @@
         }
 
         async function getGreeting() {
-            const token = localStorage.getItem('jwtToken'); // Get the stored JWT token
-            if (!token) {
-                console.error("No JWT token found in localStorage");
+            const jwtToken = localStorage.getItem('jwtToken'); // Get the JWT token from localStorage
+
+            if (!jwtToken) {
+                console.log("No JWT token found. User might be logged out.");
+                document.getElementById('welcomeMessage').innerText = ""; // Clear the greeting
+                document.getElementById('logoutButton').style.display = 'none'; // Hide logout button
                 return;
             }
 
-            const response = await fetch('http://localhost:8080/', {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`  // Include the token in the request
-                }
-            });
-
-            if (response.ok) {
-                const greeting = await response.text(); // Assuming the response is plain text
-                localStorage.setItem('greeting', greeting);  // Save the greeting in localStorage
-                document.getElementById('welcomeMessage').innerText = greeting;
-            } else {
-                console.error("Error fetching greeting:", response.statusText);
+            const username = localStorage.getItem('username'); // Get the stored username
+            if (!username) {
+                console.error("No username found in localStorage.");
+                return;
             }
+
+            // Display the greeting message with the user's name
+            document.getElementById('welcomeMessage').innerText = `Welcome to PersoNet, ${username}!`;
+            document.getElementById('logoutButton').style.display = 'block'; // Show the logout button when authenticated
+        }
+
+        async function logout() {
+            // Delete the JWT token from localStorage
+            localStorage.removeItem('jwtToken');
+            localStorage.removeItem('username');
+
+            // Redirect to the login page or homepage
+            window.location.href = 'index.html';
+        }
+
+        function showError(message) {
+            document.getElementById('errorMessage').innerText = message; // Set the error message
+            document.getElementById('errorMessage').style.display = 'block'; // Show the error message
         }
 
         function toggleAuth() {
             const registerButton = document.getElementById('registerButton');
-            registerButton.style.display = registerButton.style.display === 'none' ? 'block' : 'none';
-
-            // Clear input fields when switching between login and register
-            document.getElementById('username').value = '';
-            document.getElementById('password').value = '';
-        }
-
-        function showError(message) {
-            const errorMessageDiv = document.getElementById('errorMessage');
-            errorMessageDiv.innerText = message;
-            errorMessageDiv.style.display = 'block'; // Show error message
+            if (registerButton.style.display === "none") {
+                registerButton.style.display = "block"; // Show the register button
+            } else {
+                registerButton.style.display = "none"; // Hide the register button
+            }
         }
     </script>
 </body>

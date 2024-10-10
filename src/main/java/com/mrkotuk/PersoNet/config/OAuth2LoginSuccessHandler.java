@@ -9,11 +9,14 @@ import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mrkotuk.PersoNet.model.AuthResponse;
 import com.mrkotuk.PersoNet.model.User;
 import com.mrkotuk.PersoNet.repo.UserRepo;
 import com.mrkotuk.PersoNet.service.JWTService;
 
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.AllArgsConstructor;
@@ -34,27 +37,37 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
         User user = processOAuth2User(oAuth2User);
 
-        System.out.println("User authenticated: " + user.getUsername());
-
         String jwtToken = jwtService.generateToken(user.getUsername());
 
-        if (jwtToken == null) {
+        if (jwtToken != null) {
+            Cookie cookie = new Cookie("jwtToken", jwtToken);
+            cookie.setHttpOnly(true);
+            cookie.setSecure(true);
+            cookie.setPath("/");
+            cookie.setMaxAge(24 * 60 * 60);
+            response.addCookie(cookie);
+
+            AuthResponse authResponse = new AuthResponse();
+            authResponse.setToken(jwtToken);
+            authResponse.setUsername(user.getUsername());
+
+            response.setContentType("application/json");
+            response.setStatus(HttpServletResponse.SC_OK);
+
+            ObjectMapper objectMapper = new ObjectMapper();
+
+            response.getWriter().write(objectMapper.writeValueAsString(authResponse));
+            System.out.println("JWT Token sent in response: " + jwtToken);
+        } else {
             System.err.println("JWT Token generation failed for user: " + user.getUsername());
             response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "JWT Token generation failed");
             return;
         }
 
-        System.out.println("Generated JWT Token: " + jwtToken);
+        System.out.println("User authenticated: " + user.getUsername());
+        System.out.println("Authenticated: " + authentication.isAuthenticated());
 
         response.sendRedirect("http://127.0.0.1:5500/src/main/frontend/index.html");
-
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-
-        response.setHeader("Authorization", "Bearer " + jwtToken);
-        response.setContentType("application/json");
-        response.getWriter().write("{\"token\": \"" + jwtToken + "\"}");
-        response.getWriter().flush();
     }
 
     public User processOAuth2User(OAuth2User oAuth2User) {

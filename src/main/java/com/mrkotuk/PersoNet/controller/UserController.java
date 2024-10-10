@@ -11,6 +11,8 @@ import com.mrkotuk.PersoNet.model.AuthResponse;
 import com.mrkotuk.PersoNet.model.User;
 import com.mrkotuk.PersoNet.service.UserService;
 
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.AllArgsConstructor;
 
 @CrossOrigin
@@ -27,15 +29,23 @@ public class UserController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@RequestBody User user) {
+    public ResponseEntity<AuthResponse> login(@RequestBody User user, HttpServletResponse response) {
         System.out.println("Login attempt for user: " + user.getUsername());
 
         String token = service.verify(user);
 
         if (token != null) {
-            AuthResponse response = new AuthResponse();
-            response.setToken(token);
-            return new ResponseEntity<>(response, HttpStatus.OK);
+            Cookie cookie = new Cookie("jwtToken", token);
+            cookie.setHttpOnly(true);
+            cookie.setSecure(true);
+            cookie.setPath("/");
+            cookie.setMaxAge(24 * 60 * 60);
+            response.addCookie(cookie);
+
+            AuthResponse authResponse = new AuthResponse();
+            authResponse.setToken(token);
+            authResponse.setUsername(user.getUsername());
+            return new ResponseEntity<>(authResponse, HttpStatus.OK);
         } else {
             AuthResponse errorResponse = new AuthResponse();
             errorResponse.setMessage("Invalid credentials");
